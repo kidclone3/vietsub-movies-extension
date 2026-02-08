@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VietSub Player - Xem Phim Việt</title>
-    <script src="https://cdn.jwplayer.com/libraries/VXc5h4Tf.js"></script>
+    <!-- Plyr CSS -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <!-- HLS.js -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         * {
             margin: 0;
@@ -44,12 +47,16 @@
             background: #000;
             border-radius: 12px;
             overflow: hidden;
-            aspect-ratio: 16/9;
             margin-bottom: 20px;
         }
-        #jwplayer-container {
-            width: 100%;
-            height: 100%;
+        /* Plyr customization */
+        .plyr {
+            --plyr-color-main: #A3765D;
+            --plyr-video-background: #000;
+            border-radius: 12px;
+        }
+        .plyr__controls {
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
         }
         .controls-panel {
             background: #1a1a1a;
@@ -190,12 +197,14 @@
 <body>
     <div class="header">
         <h1>VietSub Player</h1>
-        <span class="badge">Powered by JWPlayer</span>
+        <span class="badge">Open Source</span>
     </div>
 
     <div class="container">
         <div class="player-container">
-            <div id="jwplayer-container"></div>
+            <video id="player" playsinline controls>
+                <source src="" type="application/x-mpegURL" />
+            </video>
         </div>
 
         <div class="status-message" id="statusMessage"></div>
@@ -237,9 +246,47 @@
         </div>
     </div>
 
+    <!-- Plyr JS -->
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script>
-        // Initialize JWPlayer
-        jwplayer.key = 'XSuP4qnhlG9R/TOs4vFqDUHVoRRQSjQM6k3+AQ==6rnQ+esqEsW+Qy4s5WG1wg==';
+        // Initialize Plyr
+        const player = new Plyr('#player', {
+            debug: false,
+            controls: [
+                'play-large',
+                'play',
+                'progress',
+                'current-time',
+                'duration',
+                'mute',
+                'volume',
+                'settings',
+                'pip',
+                'airplay',
+                'fullscreen'
+            ],
+            settings: ['quality', 'speed'],
+            speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+            i18n: {
+                play: 'Phát',
+                pause: 'Tạm dừng',
+                seek: 'Tìm kiếm',
+                seekForward: 'Tới {currentTime}s',
+                seekBackward: 'Lùi {currentTime}s',
+                currentTime: 'Thời gian hiện tại',
+                duration: 'Thời lượng',
+                volume: 'Âm lượng',
+                mute: 'Tắt tiếng',
+                unmute: 'Bật tiếng',
+                enterFullscreen: 'Toàn màn hình',
+                exitFullscreen: 'Thoát toàn màn hình',
+                settings: 'Cài đặt',
+                pip: 'PiP',
+                menu: 'Menu',
+                quality: 'Chất lượng',
+                speed: 'Tốc độ'
+            }
+        });
 
         const streamUrlInput = document.getElementById('streamUrl');
         const episodeSelect = document.getElementById('episodeSelect');
@@ -252,6 +299,7 @@
         let currentEpisode = 1;
         let currentServer = 0;
         let allServers = [];
+        let hls = null;
 
         // Initialize episode selector
         function initEpisodeSelector() {
@@ -344,7 +392,7 @@
             loadStreamDirect(server.url);
         }
 
-        // Load stream with JWPlayer
+        // Load stream with Plyr + HLS.js
         function loadStreamDirect(url) {
             if (!url) {
                 showMessage('error', 'Không có URL stream.');
@@ -354,43 +402,56 @@
             streamUrlInput.value = url;
             showMessage('info', `Đang tải: ${allServers[currentServer]?.name || 'Custom URL'}...`);
 
-            // Setup JWPlayer
-            const player = jwplayer('jwplayer-container');
+            // Cleanup previous HLS instance
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
 
-            player.setup({
-                file: url,
-                width: '100%',
-                aspectratio: '16:9',
-                autostart: true,
-                preload: 'auto',
-                // JWPlayer HLS settings
-                hlsjsconfig: {
+            const video = document.getElementById('player');
+
+            if (Hls.isSupported() && url.includes('.m3u8')) {
+                hls = new Hls({
                     enableWorker: true,
                     lowLatencyMode: true
-                }
-            });
+                });
+                hls.loadSource(url);
+                hls.attachMedia(video);
 
-            // Handle player events
-            player.on('ready', function() {
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    hideMessage();
+                    player.play().catch(e => {
+                        console.log('Auto-play prevented');
+                    });
+                });
+
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        showMessage('error', 'Lỗi mạng: Không thể tải stream. Thử đổi server khác.');
+                        if (data.type === 'networkError') {
+                            hls.startLoad();
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                player.source = {
+                    type: 'video',
+                    sources: [{ src: url, type: 'application/x-mpegURL' }]
+                };
                 hideMessage();
-            });
-
-            player.on('play', function() {
+                player.play().catch(e => {
+                    console.log('Auto-play prevented');
+                });
+            } else {
+                player.source = {
+                    type: 'video',
+                    sources: [{ src: url, type: 'video/mp4' }]
+                };
                 hideMessage();
-            });
-
-            player.on('buffer', function() {
-                showMessage('info', 'Đang tải dữ liệu...');
-            });
-
-            player.on('idle', function() {
-                hideMessage();
-            });
-
-            player.onError(function(error) {
-                console.error('JWPlayer error:', error);
-                showMessage('error', 'Không thể phát video. Thử đổi server khác.');
-            });
+                player.play().catch(e => {
+                    console.log('Auto-play prevented');
+                });
+            }
         }
 
         // Load custom URL
@@ -412,23 +473,6 @@
         function hideMessage() {
             statusMessage.style.display = 'none';
         }
-
-        // Handle keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            const player = jwplayer();
-            if (e.key === 'ArrowLeft' && player.getPosition() > 5) {
-                player.seek(player.getPosition() - 5);
-            } else if (e.key === 'ArrowRight') {
-                player.seek(player.getPosition() + 5);
-            } else if (e.key === ' ') {
-                e.preventDefault();
-                if (player.getState() === 'playing') {
-                    player.pause();
-                } else {
-                    player.play();
-                }
-            }
-        });
 
         // Initialize on load
         window.addEventListener('DOMContentLoaded', () => {
