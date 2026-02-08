@@ -55,7 +55,7 @@ async function getVideoSources(slug, episode = null) {
       console.log(`Found JWPlayer source: ${playerData.file}`);
       sources.push({
         name: `VietSub${episode ? ` - Tập ${episode}` : ''}`,
-        url: playerData.file
+        externalUrl: playerData.file
       });
     }
 
@@ -66,7 +66,7 @@ async function getVideoSources(slug, episode = null) {
           console.log(`Found additional source ${index}: ${source.file}`);
           sources.push({
             name: `VietSub ${source.label || `Quality ${index}`}${episode ? ` - Tập ${episode}` : ''}`,
-            url: source.file
+            externalUrl: source.file
           });
         }
       });
