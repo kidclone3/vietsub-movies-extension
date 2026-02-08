@@ -8,77 +8,202 @@ const { chromium } = require('playwright');
 const BASE_URL = 'https://motchilltv.chat';
 
 /**
- * Extract video sources from a motchilltv movie/show page
+ * Extract all server options and their stream URLs from a motchilltv episode page
  * @param {string} slug - The slug/path of the content (e.g., 'con-ra-the-thong-gi-nua')
- * @param {number} episode - Episode number (optional, for series)
- * @returns {Promise<Array>} Array of stream objects for Stremio
+ * @param {number} episode - Episode number
+ * @returns {Promise<Object>} Object containing all servers and their streams
  */
-async function getVideoSources(slug, episode = null) {
+async function getAllServers(slug, episode = 1) {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
-  const sources = [];
 
   try {
-    // For series, we need to navigate to the episode page
-    // The episode URL pattern is: /xem-phim-{slug}-tap-{episode}
     const url = episode
       ? `${BASE_URL}/xem-phim-${slug}-tap-${episode}`
-      : `${BASE_URL}/xem-phim-${slug}-tap-1`; // Default to episode 1 if no episode specified
+      : `${BASE_URL}/xem-phim-${slug}-tap-1`;
 
     console.log(`Navigating to: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-
-    // Wait for JWPlayer to initialize
     await page.waitForTimeout(5000);
 
-    // Extract video sources from JWPlayer configuration
-    const playerData = await page.evaluate(() => {
-      if (window.jwplayer) {
-        try {
-          const player = window.jwplayer();
-          const playlist = player.getPlaylist();
-          if (playlist && playlist[0]) {
-            return {
-              file: playlist[0].file,
-              sources: playlist[0].sources || [],
-              image: playlist[0].image
-            };
-          }
-        } catch (e) {
-          return { error: e.message };
-        }
-      }
-      return null;
-    });
-
-    if (playerData && playerData.file) {
-      console.log(`Found JWPlayer source: ${playerData.file}`);
-      sources.push({
-        name: `VietSub${episode ? ` - Tập ${episode}` : ''}`,
-        externalUrl: playerData.file
-      });
-    }
-
-    // Also check allSources for multiple quality options
-    if (playerData && playerData.sources) {
-      playerData.sources.forEach((source, index) => {
-        if (source.file && source.file !== playerData.file) {
-          console.log(`Found additional source ${index}: ${source.file}`);
-          sources.push({
-            name: `VietSub ${source.label || `Quality ${index}`}${episode ? ` - Tập ${episode}` : ''}`,
-            externalUrl: source.file
+    // Find all server buttons (both Vietsub and Thuyết Minh)
+    const serverButtons = await page.evaluate(() => {
+      const results = [];
+      const buttons = Array.from(document.querySelectorAll('button'));
+      buttons.forEach(btn => {
+        const text = btn.textContent?.trim();
+        const classList = Array.from(btn.classList || []);
+        // Look for server buttons - include Vietsub, Thuyết Minh, and general server buttons
+        const lowerText = text.toLowerCase();
+        if (text && text.length > 0 && text.length < 50 &&
+            (lowerText.includes('vietsub') ||
+             lowerText.includes('thuyết minh') ||
+             lowerText.includes('thuyetminh') ||
+             lowerText.includes('server'))) {
+          results.push({
+            text,
+            classList,
+            isActive: classList.includes('bg-[#A3765D]') || classList.some(c => c.includes('#A3765D'))
           });
         }
       });
+      return results;
+    });
+
+    // Click each server button and get the stream URL
+    const serverStreams = [];
+
+    for (const btn of serverButtons) {
+      console.log(`  Testing server: ${btn.text}`);
+
+      // Click the button
+      await page.evaluate((btnText) => {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const target = buttons.find(b => b.textContent?.trim() === btnText);
+        if (target) {
+          target.click();
+        }
+      }, btn.text);
+
+      // Wait for player to update
+      await page.waitForTimeout(3000);
+
+      // Get the current stream URL
+      const streamInfo = await page.evaluate(() => {
+        if (window.jwplayer) {
+          try {
+            const player = window.jwplayer();
+            const playlist = player.getPlaylist();
+            if (playlist && playlist[0]) {
+              return {
+                file: playlist[0].file,
+                sources: playlist[0].sources?.map(s => ({
+                  file: s.file,
+                  label: s.label
+                }))
+              };
+            }
+          } catch (e) {
+            return { error: e.message };
+          }
+        }
+        return null;
+      });
+
+      serverStreams.push({
+        name: btn.text,
+        url: streamInfo?.file,
+        isActive: btn.isActive
+      });
     }
 
+    return {
+      slug,
+      episode,
+      servers: serverStreams
+    };
+
   } catch (error) {
-    console.error(`Error scraping ${slug}:`, error.message);
+    console.error(`Error scraping servers from ${slug}:`, error.message);
+    return { slug, episode, servers: [], error: error.message };
   } finally {
     await browser.close();
   }
+}
 
-  return sources;
+/**
+ * Get video sources with fallback servers
+ * Returns multiple stream options for redundancy
+ * @param {string} slug - The slug/path of the content
+ * @param {number} episode - Episode number (optional)
+ * @returns {Promise<Array>} Array of stream objects for Stremio
+ */
+async function getVideoSources(slug, episode = null) {
+  const result = await getAllServers(slug, episode || 1);
+
+  // Convert to Stremio stream format
+  const streams = result.servers.map(server => ({
+    name: `VietSub${episode ? ` - Tập ${episode}` : ''} - ${server.name}`,
+    externalUrl: server.url
+  }));
+
+  // If no servers found, return empty array
+  if (streams.length === 0) {
+    console.error(`No servers found for ${slug} episode ${episode}`);
+    return [];
+  }
+
+  console.log(`Found ${streams.length} stream(s) for ${slug} episode ${episode}`);
+  return streams;
+}
+
+/**
+ * Get detailed metadata for a specific movie/show
+ * @param {string} slug - The slug/path of the content
+ * @returns {Promise<Object>} Meta object for Stremio
+ */
+async function getMeta(slug) {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+
+  try {
+    await page.goto(`${BASE_URL}/${slug}`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(3000);
+
+    // Extract metadata from the page
+    const meta = await page.evaluate(() => {
+      const title = document.querySelector('h1, h2, .title')?.textContent?.trim() || 'Unknown';
+      const description = document.querySelector('.description, .summary, .content, [class*="intro"]')?.textContent?.trim() || '';
+      const poster = document.querySelector('.poster img, .movie-poster img, img[class*="poster"]')?.getAttribute('src') || '';
+      const backdrop = document.querySelector('img[class*="backdrop"], img[class*="banner"]')?.getAttribute('src') || poster;
+
+      // Try to extract genres
+      const genreElements = document.querySelectorAll('[class*="genre"], a[href*="/the-loai/"]');
+      const genres = Array.from(genreElements).map(el => el.textContent?.trim()).filter(Boolean).slice(0, 5);
+
+      // Try to extract year
+      const yearElement = document.querySelector('[class*="year"]');
+      const year = yearElement?.textContent?.match(/\d{4}/)?.[0] || '';
+
+      // Try to extract episode count for series
+      const episodeLinks = document.querySelectorAll('a[href*="tap-"]');
+      const isSeries = episodeLinks.length > 0;
+      const episodeCount = isSeries ? episodeLinks.length : 1;
+
+      return {
+        title,
+        description: description.substring(0, 500),
+        poster,
+        backdrop,
+        genres: genres.length > 0 ? genres : ['Vietnamese', 'Asian'],
+        year,
+        type: isSeries ? 'series' : 'movie',
+        episodeCount
+      };
+    });
+
+    return {
+      id: `vietsub-${slug}`,
+      type: meta.type,
+      name: meta.title,
+      poster: meta.poster,
+      background: meta.backdrop,
+      description: meta.description || `Vietnamese ${meta.type} from motchilltv.chat`,
+      genres: meta.genres,
+      year: meta.year,
+      info: meta.type === 'series' ? [`Episodes: ${meta.episodeCount}`] : undefined
+    };
+
+  } catch (error) {
+    console.error('Error scraping meta:', error.message);
+    return {
+      id: `vietsub-${slug}`,
+      type: 'movie',
+      name: 'Unknown'
+    };
+  } finally {
+    await browser.close();
+  }
 }
 
 /**
@@ -97,7 +222,6 @@ async function getCatalog(type = 'movie') {
 
     // Extract movie/show cards from the page using page.evaluate
     const items = await page.evaluate(() => {
-      // Look for all links that might be content items
       const links = document.querySelectorAll('a[href^="/"], a[href^="http"]');
       const results = [];
 
@@ -145,7 +269,6 @@ async function getCatalog(type = 'movie') {
         const meta = await getMeta(item.slug);
         catalog.push(meta);
       } catch (e) {
-        // If we can't get detailed meta, add basic info
         catalog.push({
           id: `vietsub-${item.slug.replace(/\//g, '-')}`,
           type: type,
@@ -165,78 +288,9 @@ async function getCatalog(type = 'movie') {
   return catalog;
 }
 
-/**
- * Get detailed metadata for a specific movie/show
- * @param {string} slug - The slug/path of the content
- * @returns {Promise<Object>} Meta object for Stremio
- */
-async function getMeta(slug) {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
-
-  try {
-    await page.goto(`${BASE_URL}/${slug}`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(3000);
-
-    // Extract metadata from the page
-    const meta = await page.evaluate(() => {
-      const title = document.querySelector('h1, h2, .title')?.textContent?.trim() || 'Unknown';
-      const description = document.querySelector('.description, .summary, .content, [class*="intro"]')?.textContent?.trim() || '';
-      const poster = document.querySelector('.poster img, .movie-poster img, img[class*="poster"]')?.getAttribute('src') || '';
-      const backdrop = document.querySelector('img[class*="backdrop"], img[class*="banner"]')?.getAttribute('src') || poster;
-
-      // Try to extract genres
-      const genreElements = document.querySelectorAll('[class*="genre"], a[href*="/the-loai/"]');
-      const genres = Array.from(genreElements).map(el => el.textContent?.trim()).filter(Boolean).slice(0, 5);
-
-      // Try to extract year
-      const yearElement = document.querySelector('[class*="year"]');
-      const year = yearElement?.textContent?.match(/\d{4}/)?.[0] || '';
-
-      // Try to extract episode count for series
-      const episodeLinks = document.querySelectorAll('a[href*="tap-"]');
-      const isSeries = episodeLinks.length > 0;
-      const episodeCount = isSeries ? episodeLinks.length : 1;
-
-      return {
-        title,
-        description: description.substring(0, 500), // Limit description length
-        poster,
-        backdrop,
-        genres: genres.length > 0 ? genres : ['Vietnamese', 'Asian'],
-        year,
-        type: isSeries ? 'series' : 'movie',
-        episodeCount
-      };
-    });
-
-    return {
-      id: `vietsub-${slug}`,
-      type: meta.type,
-      name: meta.title,
-      poster: meta.poster,
-      background: meta.backdrop,
-      description: meta.description || `Vietnamese ${meta.type} from motchilltv.chat`,
-      genres: meta.genres,
-      year: meta.year,
-      // For series, add info about episodes
-      info: meta.type === 'series' ? [`Episodes: ${meta.episodeCount}`] : undefined
-    };
-
-  } catch (error) {
-    console.error('Error scraping meta:', error.message);
-    return {
-      id: `vietsub-${slug}`,
-      type: 'movie',
-      name: 'Unknown'
-    };
-  } finally {
-    await browser.close();
-  }
-}
-
 module.exports = {
   getVideoSources,
+  getAllServers,
   getCatalog,
   getMeta
 };

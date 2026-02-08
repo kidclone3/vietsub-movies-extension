@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VietSub Player - Xem Phim Việt</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
+        .header h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .header .badge {
+            background: #A3765D;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .player-container {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .controls-panel {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .controls-panel h3 {
+            margin-bottom: 15px;
+            font-size: 1rem;
+            color: #A3765D;
+        }
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .control-group label {
+            font-size: 0.9rem;
+            color: #888;
+            min-width: 80px;
+        }
+        select, input {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            min-width: 200px;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #A3765D;
+        }
+        .btn {
+            background: #A3765D;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #8a624d;
+        }
+        .btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #333;
+        }
+        .btn-secondary:hover {
+            background: #444;
+        }
+        .server-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .server-btn {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .server-btn:hover {
+            background: #333;
+        }
+        .server-btn.active {
+            background: #A3765D;
+            border-color: #A3765D;
+        }
+        .info-panel {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .info-panel h3 {
+            margin-bottom: 10px;
+            font-size: 1rem;
+            color: #A3765D;
+        }
+        .info-panel p {
+            color: #888;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .status-message {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+            display: none;
+        }
+        .status-message.error {
+            background: rgba(220, 38, 38, 0.2);
+            color: #f87171;
+            border: 1px solid #7f1d1d;
+        }
+        .status-message.info {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid #1e3a8a;
+        }
+        .status-message.warning {
+            background: rgba(234, 179, 8, 0.2);
+            color: #facc15;
+            border: 1px solid #713f12;
+        }
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #333;
+            border-top-color: #A3765D;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            .control-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .control-group label {
+                min-width: auto;
+            }
+            select, input {
+                min-width: auto;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>VietSub Player</h1>
+        <span class="badge">Beta</span>
+    </div>
+
+    <div class="container">
+        <div class="player-container">
+            <video id="video" controls></video>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>Đang tải...</div>
+            </div>
+        </div>
+
+        <div class="status-message" id="statusMessage"></div>
+
+        <div class="controls-panel">
+            <h3>Chọn tập</h3>
+            <div class="control-group">
+                <label>Tập:</label>
+                <select id="episodeSelect">
+                    <option value="">Đang tải danh sách tập...</option>
+                </select>
+                <button class="btn" onclick="loadEpisode()">Xem tập</button>
+            </div>
+
+            <h3 style="margin-top: 20px;">Chọn Server</h3>
+            <div class="control-group">
+                <label>Server:</label>
+                <div class="server-buttons" id="serverButtons">
+                    <button class="server-btn" onclick="loadServers()">Đổi Server</button>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 20px;">Hoặc nhập URL trực tiếp</h3>
+            <div class="control-group">
+                <input type="text" id="streamUrl" placeholder="Nhập URL stream .m3u8" />
+                <button class="btn btn-secondary" onclick="loadCustomUrl()">Phát</button>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h3>Thông tin</h3>
+            <p>
+                <strong>Phim:</strong> <span id="movieTitle">How Dare You!? (Còn Ra Thể Thống Gì Nữa)</span><br>
+                <strong>Tập hiện tại:</strong> <span id="currentEpisode">-</span>
+            </p>
+            <p style="margin-top: 10px;">
+                <small>Lưu ý: Nếu server mặc định không hoạt động, hãy thử đổi sang server khác (Vietsub 2, Vietsub 4K).</small>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const streamUrlInput = document.getElementById('streamUrl');
+        const episodeSelect = document.getElementById('episodeSelect');
+        const serverButtons = document.getElementById('serverButtons');
+        const statusMessage = document.getElementById('statusMessage');
+        const loading = document.getElementById('loading');
+
+        // Movie info
+        const MOVIE_SLUG = 'con-ra-the-thong-gi-nua';
+        const TOTAL_EPISODES = 16; // Update this based on actual episode count
+        let currentEpisode = 1;
+        let currentServer = 0;
+        let allServers = [];
+        let hls = null;
+
+        // Initialize episode selector
+        function initEpisodeSelector() {
+            episodeSelect.innerHTML = '';
+            for (let i = 1; i <= TOTAL_EPISODES; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Tập ${i}`;
+                episodeSelect.appendChild(option);
+            }
+
+            // Check for episode in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const ep = urlParams.get('episode');
+            if (ep) {
+                episodeSelect.value = ep;
+                loadEpisode();
+            } else {
+                loadEpisode();
+            }
+        }
+
+        // Load episode
+        async function loadEpisode() {
+            const episode = parseInt(episodeSelect.value);
+            if (!episode) return;
+
+            currentEpisode = episode;
+            document.getElementById('currentEpisode').textContent = episode;
+
+            // Update URL without reload
+            const url = new URL(window.location);
+            url.searchParams.set('episode', episode);
+            window.history.pushState({}, '', url);
+
+            showLoading(true);
+            showMessage('info', `Đang tải tập ${episode}...`);
+
+            try {
+                const response = await fetch(`/api/servers/${MOVIE_SLUG}/${episode}`);
+                if (!response.ok) throw new Error('Failed to fetch servers');
+                const data = await response.json();
+
+                allServers = data.servers || [];
+                if (allServers.length > 0) {
+                    updateServerButtons();
+                    loadServer(0);
+                } else {
+                    showMessage('error', 'Không tìm thấy server nào.');
+                    showLoading(false);
+                }
+            } catch (error) {
+                console.error('Error loading episode:', error);
+                showMessage('error', `Lỗi tải tập: ${error.message}`);
+                showLoading(false);
+            }
+        }
+
+        // Load servers for current episode
+        async function loadServers() {
+            if (allServers.length === 0) {
+                await loadEpisode();
+                return;
+            }
+            updateServerButtons();
+        }
+
+        // Update server button UI
+        function updateServerButtons() {
+            serverButtons.innerHTML = '';
+            allServers.forEach((server, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'server-btn' + (index === currentServer ? ' active' : '');
+                btn.textContent = server.name;
+                btn.onclick = () => loadServer(index);
+                serverButtons.appendChild(btn);
+            });
+        }
+
+        // Load specific server
+        function loadServer(index) {
+            if (index < 0 || index >= allServers.length) return;
+
+            currentServer = index;
+            const server = allServers[index];
+
+            // Update active state
+            document.querySelectorAll('.server-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i === index);
+            });
+
+            // Load the stream
+            loadStreamDirect(server.url);
+        }
+
+        // Load stream directly
+        function loadStreamDirect(url) {
+            if (!url) {
+                showMessage('error', 'Không có URL stream.');
+                return;
+            }
+
+            streamUrlInput.value = url;
+            showLoading(true);
+
+            // Cleanup previous HLS instance
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+
+            if (Hls.isSupported() && url.includes('.m3u8')) {
+                hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true
+                });
+                hls.loadSource(url);
+                hls.attachMedia(video);
+
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    showLoading(false);
+                    video.play().catch(e => {
+                        console.log('Auto-play prevented, waiting for user interaction');
+                        showMessage('info', 'Nhấn vào video để phát.');
+                    });
+                });
+
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        showLoading(false);
+                        if (data.type === 'networkError') {
+                            showMessage('error', 'Lỗi mạng: Không thể tải stream. Thử đổi server khác.');
+                        } else {
+                            showMessage('error', `Lỗi HLS: ${data.type}`);
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('loadedmetadata', function() {
+                    showLoading(false);
+                    video.play().catch(e => {
+                        showMessage('info', 'Nhấn vào video để phát.');
+                    });
+                });
+                video.addEventListener('error', function() {
+                    showLoading(false);
+                    showMessage('error', 'Không thể phát video. Thử đổi server khác.');
+                });
+            } else {
+                video.src = url;
+                video.play().then(() => {
+                    showLoading(false);
+                }).catch(e => {
+                    showLoading(false);
+                    showMessage('info', 'Nhấn vào video để phát.');
+                });
+            }
+        }
+
+        // Load custom URL
+        function loadCustomUrl() {
+            const url = streamUrlInput.value.trim();
+            if (url) {
+                loadStreamDirect(url);
+            }
+        }
+
+        // Show status message
+        function showMessage(type, message) {
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.textContent = message;
+            statusMessage.style.display = 'block';
+        }
+
+        // Show/hide loading
+        function showLoading(show) {
+            loading.classList.toggle('active', show);
+        }
+
+        // Handle keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' && video.currentTime > 5) {
+                video.currentTime -= 5;
+            } else if (e.key === 'ArrowRight') {
+                video.currentTime += 5;
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                if (video.paused) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+            }
+        });
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initEpisodeSelector();
+
+            // Check for custom URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const customUrl = urlParams.get('url');
+            if (customUrl) {
+                loadStreamDirect(customUrl);
+            }
+        });
+    </script>
+</body>
+</html>

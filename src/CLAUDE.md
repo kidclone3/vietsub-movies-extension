@@ -7,6 +7,18 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #348 | 3:43 PM | 🟣 | Implemented Vietnamese-English title mapping module | ~367 |
+| #347 | " | 🔴 | Stream property changed from internal proxy URL to direct externalUrl | ~271 |
+| #346 | 3:42 PM | 🔵 | Stream object format verified with 'name' property | ~201 |
+| #335 | 3:36 PM | 🔴 | Fixed Stremio HLS proxy error by using externalUrl instead of url | ~266 |
+| #332 | " | 🔄 | Stream object property changed from url to externalUrl for Stremio compatibility | ~213 |
+| #331 | " | 🔄 | Stream objects updated to use externalUrl property for Stremio compatibility | ~215 |
+| #324 | 3:34 PM | 🔴 | Fixed stream object property name for Stremio compatibility | ~204 |
+| #321 | 3:33 PM | 🔄 | Stream object property renamed from title to name for Stremio protocol compliance | ~198 |
+| #320 | " | 🔵 | Scraper episode labeling format reviewed for Vietnamese display | ~178 |
+| #316 | 3:32 PM | 🔴 | Extension not playing streams in Stremio | ~153 |
+| #293 | 3:26 PM | 🟣 | Mapping module created and pushed to GitHub repository | ~183 |
+| #290 | 3:25 PM | ✅ | Title mapping updated with correct IMDb ID and additional alternative titles | ~218 |
 | #270 | 3:18 PM | 🟣 | Stremio addon successfully serves manifest, metadata, and HLS video streams | ~173 |
 | #268 | " | 🔄 | Refactored getCatalog with improved link extraction and detailed metadata fetching | ~321 |
 | #267 | " | 🔄 | Fixed CSS selector for year extraction in getMeta function | ~156 |

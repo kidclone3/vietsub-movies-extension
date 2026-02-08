@@ -1,115 +1,106 @@
 /**
- * Title mapping for Vietnamese content to IMDb IDs and English titles
- * This allows Stremio to recognize content by its English name
+ * Vietnamese-English Title Mapping Module
+ * Maps IMDb IDs to Vietnamese content slugs
  */
 
-const TITLE_MAPPING = {
-  // Format: 'vietnamese-slug': { imdbId, englishTitle, vietnameseTitle }
-  'con-ra-the-thong-gi-nua': {
+// Mapping of IMDb IDs to Vietnamese slugs and titles
+const MAPPINGS = [
+  {
     imdbId: 'tt35231547',
-    englishTitle: 'How Dare You',
     vietnameseTitle: 'Còn Ra Thể Thống Gì Nữa',
-    alsoKnownAs: ['Cheng He Ti Tong', 'In What Manner', 'This Is Ridiculous', 'What a Disgrace']
+    englishTitle: 'How Dare You!?',
+    slug: 'con-ra-the-thong-gi-nua',
+    alsoKnownAs: ['How Dare You', 'Còn Ra Thể Thống Gì Nữa']
   }
-};
+];
+
+// Additional titles that can be searched
+const ADDITIONAL_TITLES = [
+  {
+    vietnameseTitle: 'Còn Ra Thể Thống Gì Nữa',
+    englishTitle: 'How Dare You!?',
+    slug: 'con-ra-the-thong-gi-nua'
+  }
+];
 
 /**
- * Find content by English title or IMDb ID
- * @param {string} query - English title or IMDb ID to search for
- * @returns {Object|null} - Matching entry with Vietnamese slug
+ * Find mapping by IMDb ID
  */
-function findByEnglishTitle(query) {
-  const normalizedQuery = query.toLowerCase().trim();
-
-  for (const [slug, data] of Object.entries(TITLE_MAPPING)) {
-    // Check exact English title match
-    if (data.englishTitle.toLowerCase() === normalizedQuery) {
-      return { slug, ...data };
-    }
-
-    // Check IMDb ID match
-    if (data.imdbId === normalizedQuery) {
-      return { slug, ...data };
-    }
-
-    // Check "also known as" titles
-    if (data.alsoKnownAs) {
-      for (const aka of data.alsoKnownAs) {
-        if (aka.toLowerCase() === normalizedQuery) {
-          return { slug, ...data };
-        }
-      }
-    }
-
-    // Check partial match
-    if (data.englishTitle.toLowerCase().includes(normalizedQuery) ||
-        normalizedQuery.includes(data.englishTitle.toLowerCase())) {
-      return { slug, ...data };
-    }
-  }
-
-  return null;
+function findByImdbId(imdbId) {
+  return MAPPINGS.find(m => m.imdbId === imdbId);
 }
 
 /**
- * Get Vietnamese slug from IMDb ID or English title
- * @param {string} id - IMDb ID (e.g., 'tt1234567') or English title
- * @returns {string|null} - Vietnamese slug or null
+ * Find mapping by Vietnamese slug
  */
-function getSlugFromId(id) {
-  const match = findByEnglishTitle(id);
-  return match ? match.slug : null;
+function findBySlug(slug) {
+  return MAPPINGS.find(m => m.slug === slug);
 }
 
 /**
- * Get metadata with English title mapping
- * @param {string} slug - Vietnamese slug
- * @returns {Object} - Metadata with English titles
+ * Find mapping by English title
+ */
+function findByEnglishTitle(title) {
+  // Case-insensitive partial match
+  const lowerTitle = title.toLowerCase();
+  return MAPPINGS.find(m =>
+    m.englishTitle.toLowerCase().includes(lowerTitle) ||
+    lowerTitle.includes(m.englishTitle.toLowerCase())
+  );
+}
+
+/**
+ * Find mapping by Vietnamese title
+ */
+function findByVietnameseTitle(title) {
+  const lowerTitle = title.toLowerCase();
+  return MAPPINGS.find(m =>
+    m.vietnameseTitle.toLowerCase().includes(lowerTitle) ||
+    lowerTitle.includes(m.vietnameseTitle.toLowerCase())
+  );
+}
+
+/**
+ * Get slug from IMDb ID
+ */
+function getSlugFromId(imdbId) {
+  const mapping = findByImdbId(imdbId);
+  return mapping ? mapping.slug : null;
+}
+
+/**
+ * Get metadata for a slug
  */
 function getMetadata(slug) {
-  const mapping = TITLE_MAPPING[slug];
-  if (!mapping) {
-    return null;
-  }
-
-  return {
-    imdbId: mapping.imdbId,
-    englishTitle: mapping.englishTitle,
-    vietnameseTitle: mapping.vietnameseTitle,
-    alsoKnownAs: mapping.alsoKnownAs || []
-  };
+  return findBySlug(slug) || null;
 }
 
 /**
- * Add or update a mapping entry
- * @param {string} slug - Vietnamese slug
- * @param {Object} data - Mapping data
- */
-function addMapping(slug, data) {
-  TITLE_MAPPING[slug] = {
-    imdbId: data.imdbId || '',
-    englishTitle: data.englishTitle || '',
-    vietnameseTitle: data.vietnameseTitle || '',
-    alsoKnownAs: data.alsoKnownAs || []
-  };
-}
-
-/**
- * Get all mappings (for catalog generation)
- * @returns {Array} - All mapping entries
+ * Get all mappings
  */
 function getAllMappings() {
-  return Object.entries(TITLE_MAPPING).map(([slug, data]) => ({
-    slug,
-    ...data
-  }));
+  return MAPPINGS;
+}
+
+/**
+ * Search for content by title (English or Vietnamese)
+ */
+function search(query) {
+  const lowerQuery = query.toLowerCase();
+  return MAPPINGS.filter(m =>
+    m.englishTitle.toLowerCase().includes(lowerQuery) ||
+    m.vietnameseTitle.toLowerCase().includes(lowerQuery) ||
+    m.alsoKnownAs?.some(aka => aka.toLowerCase().includes(lowerQuery))
+  );
 }
 
 module.exports = {
-  TITLE_MAPPING,
+  findByImdbId,
+  findBySlug,
   findByEnglishTitle,
+  findByVietnameseTitle,
   getSlugFromId,
   getMetadata,
-  addMapping,
-  getAllMappings
+  getAllMappings,
+  search
 };

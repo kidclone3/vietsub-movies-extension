@@ -2,6 +2,7 @@ const express = require('express');
 const addon = express();
 const scraper = require('./src/scraper');
 const mapping = require('./src/mapping');
+const path = require('path');
 
 const PORT = process.env.PORT || 7000;
 
@@ -163,6 +164,36 @@ addon.get('/stream/:type/:id.json', async (req, res) => {
 // Health check
 addon.get('/', (req, res) => {
   res.send('VietSub Stremio Addon is running!');
+});
+
+// Serve player page
+addon.get('/player', (req, res) => {
+  res.sendFile(path.join(__dirname, 'player.html'));
+});
+
+// Direct player with stream URL
+addon.get('/watch', (req, res) => {
+  const { url } = req.query;
+  if (!url) {
+    return res.redirect('/player');
+  }
+  res.sendFile(path.join(__dirname, 'player.html'));
+});
+
+// API endpoint to get all servers for a slug/episode
+addon.get('/api/servers/:slug/:episode', async (req, res) => {
+  const { slug, episode } = req.params;
+
+  try {
+    const servers = await scraper.getAllServers(slug, parseInt(episode));
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    res.json(servers);
+  } catch (error) {
+    console.error('Server API error:', error);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.status(500).json({ servers: [], error: error.message });
+  }
 });
 
 addon.listen(PORT, () => {
