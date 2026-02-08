@@ -123,9 +123,25 @@ addon.get('/stream/:type/:id.json', async (req, res) => {
   const { type, id } = req.params;
 
   let slug = id;
+  let episode = null;
 
-  // Handle IMDb IDs - convert to Vietnamese slug
-  if (id.startsWith('tt')) {
+  // Handle Stremio episode ID format: {imdbId}:{season}:{episode}
+  // Example: tt35231547:1:8 -> Season 1, Episode 8
+  if (id.includes(':')) {
+    const parts = id.split(':');
+    const imdbId = parts[0];
+    const season = parts[1];
+    episode = parts[2];
+
+    console.log(`Episode request: ${imdbId} S${season}E${episode}`);
+
+    // Convert IMDb ID to Vietnamese slug
+    slug = mapping.getSlugFromId(imdbId);
+    if (!slug) {
+      slug = imdbId.replace('vietsub-', '');
+    }
+  } else if (id.startsWith('tt')) {
+    // Handle plain IMDb ID (no episode specified)
     slug = mapping.getSlugFromId(id);
     if (!slug) {
       slug = id.replace('vietsub-', '');
@@ -136,7 +152,7 @@ addon.get('/stream/:type/:id.json', async (req, res) => {
   }
 
   try {
-    const streams = await scraper.getVideoSources(slug);
+    const streams = await scraper.getVideoSources(slug, episode);
     respond(res, { streams });
   } catch (error) {
     console.error('Stream error:', error);
