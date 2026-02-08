@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VietSub Player - Xem Phim Việt</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jwplayer.com/libraries/VXc5h4Tf.js"></script>
     <style>
         * {
             margin: 0;
@@ -46,12 +46,10 @@
             overflow: hidden;
             aspect-ratio: 16/9;
             margin-bottom: 20px;
-            position: relative;
         }
-        video {
+        #jwplayer-container {
             width: 100%;
             height: 100%;
-            display: block;
         }
         .controls-panel {
             background: #1a1a1a;
@@ -171,29 +169,6 @@
             color: #facc15;
             border: 1px solid #713f12;
         }
-        .loading {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-        }
-        .loading.active {
-            display: block;
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid #333;
-            border-top-color: #A3765D;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -215,16 +190,12 @@
 <body>
     <div class="header">
         <h1>VietSub Player</h1>
-        <span class="badge">Beta</span>
+        <span class="badge">Powered by JWPlayer</span>
     </div>
 
     <div class="container">
         <div class="player-container">
-            <video id="video" controls></video>
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <div>Đang tải...</div>
-            </div>
+            <div id="jwplayer-container"></div>
         </div>
 
         <div class="status-message" id="statusMessage"></div>
@@ -261,26 +232,26 @@
                 <strong>Tập hiện tại:</strong> <span id="currentEpisode">-</span>
             </p>
             <p style="margin-top: 10px;">
-                <small>Lưu ý: Nếu server mặc định không hoạt động, hãy thử đổi sang server khác (Vietsub 2, Vietsub 4K).</small>
+                <small>Lưu ý: Nếu server mặc định không hoạt động, hãy thử đổi sang server khác (Vietsub 2, Vietsub 4K, Thuyết Minh).</small>
             </p>
         </div>
     </div>
 
     <script>
-        const video = document.getElementById('video');
+        // Initialize JWPlayer
+        jwplayer.key = 'XSuP4qnhlG9R/TOs4vFqDUHVoRRQSjQM6k3+AQ==6rnQ+esqEsW+Qy4s5WG1wg==';
+
         const streamUrlInput = document.getElementById('streamUrl');
         const episodeSelect = document.getElementById('episodeSelect');
         const serverButtons = document.getElementById('serverButtons');
         const statusMessage = document.getElementById('statusMessage');
-        const loading = document.getElementById('loading');
 
         // Movie info
         const MOVIE_SLUG = 'con-ra-the-thong-gi-nua';
-        const TOTAL_EPISODES = 16; // Update this based on actual episode count
+        const TOTAL_EPISODES = 16;
         let currentEpisode = 1;
         let currentServer = 0;
         let allServers = [];
-        let hls = null;
 
         // Initialize episode selector
         function initEpisodeSelector() {
@@ -316,7 +287,6 @@
             url.searchParams.set('episode', episode);
             window.history.pushState({}, '', url);
 
-            showLoading(true);
             showMessage('info', `Đang tải tập ${episode}...`);
 
             try {
@@ -330,12 +300,10 @@
                     loadServer(0);
                 } else {
                     showMessage('error', 'Không tìm thấy server nào.');
-                    showLoading(false);
                 }
             } catch (error) {
                 console.error('Error loading episode:', error);
                 showMessage('error', `Lỗi tải tập: ${error.message}`);
-                showLoading(false);
             }
         }
 
@@ -376,7 +344,7 @@
             loadStreamDirect(server.url);
         }
 
-        // Load stream directly
+        // Load stream with JWPlayer
         function loadStreamDirect(url) {
             if (!url) {
                 showMessage('error', 'Không có URL stream.');
@@ -384,61 +352,45 @@
             }
 
             streamUrlInput.value = url;
-            showLoading(true);
+            showMessage('info', `Đang tải: ${allServers[currentServer]?.name || 'Custom URL'}...`);
 
-            // Cleanup previous HLS instance
-            if (hls) {
-                hls.destroy();
-                hls = null;
-            }
+            // Setup JWPlayer
+            const player = jwplayer('jwplayer-container');
 
-            if (Hls.isSupported() && url.includes('.m3u8')) {
-                hls = new Hls({
+            player.setup({
+                file: url,
+                width: '100%',
+                aspectratio: '16:9',
+                autostart: true,
+                preload: 'auto',
+                // JWPlayer HLS settings
+                hlsjsconfig: {
                     enableWorker: true,
                     lowLatencyMode: true
-                });
-                hls.loadSource(url);
-                hls.attachMedia(video);
+                }
+            });
 
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    showLoading(false);
-                    video.play().catch(e => {
-                        console.log('Auto-play prevented, waiting for user interaction');
-                        showMessage('info', 'Nhấn vào video để phát.');
-                    });
-                });
+            // Handle player events
+            player.on('ready', function() {
+                hideMessage();
+            });
 
-                hls.on(Hls.Events.ERROR, function(event, data) {
-                    if (data.fatal) {
-                        showLoading(false);
-                        if (data.type === 'networkError') {
-                            showMessage('error', 'Lỗi mạng: Không thể tải stream. Thử đổi server khác.');
-                        } else {
-                            showMessage('error', `Lỗi HLS: ${data.type}`);
-                        }
-                    }
-                });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = url;
-                video.addEventListener('loadedmetadata', function() {
-                    showLoading(false);
-                    video.play().catch(e => {
-                        showMessage('info', 'Nhấn vào video để phát.');
-                    });
-                });
-                video.addEventListener('error', function() {
-                    showLoading(false);
-                    showMessage('error', 'Không thể phát video. Thử đổi server khác.');
-                });
-            } else {
-                video.src = url;
-                video.play().then(() => {
-                    showLoading(false);
-                }).catch(e => {
-                    showLoading(false);
-                    showMessage('info', 'Nhấn vào video để phát.');
-                });
-            }
+            player.on('play', function() {
+                hideMessage();
+            });
+
+            player.on('buffer', function() {
+                showMessage('info', 'Đang tải dữ liệu...');
+            });
+
+            player.on('idle', function() {
+                hideMessage();
+            });
+
+            player.onError(function(error) {
+                console.error('JWPlayer error:', error);
+                showMessage('error', 'Không thể phát video. Thử đổi server khác.');
+            });
         }
 
         // Load custom URL
@@ -456,23 +408,24 @@
             statusMessage.style.display = 'block';
         }
 
-        // Show/hide loading
-        function showLoading(show) {
-            loading.classList.toggle('active', show);
+        // Hide status message
+        function hideMessage() {
+            statusMessage.style.display = 'none';
         }
 
         // Handle keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft' && video.currentTime > 5) {
-                video.currentTime -= 5;
+            const player = jwplayer();
+            if (e.key === 'ArrowLeft' && player.getPosition() > 5) {
+                player.seek(player.getPosition() - 5);
             } else if (e.key === 'ArrowRight') {
-                video.currentTime += 5;
+                player.seek(player.getPosition() + 5);
             } else if (e.key === ' ') {
                 e.preventDefault();
-                if (video.paused) {
-                    video.play();
+                if (player.getState() === 'playing') {
+                    player.pause();
                 } else {
-                    video.pause();
+                    player.play();
                 }
             }
         });
