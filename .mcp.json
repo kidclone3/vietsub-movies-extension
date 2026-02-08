@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "node",
+      "args": ["/home/delus/.nvm/versions/node/v22.14.0/lib/node_modules/@playwright/mcp/index.js"]
+    }
+  }
+}

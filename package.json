@@ -1,0 +1,17 @@
+{
+  "name": "vietsub-stremio-addon",
+  "version": "1.0.0",
+  "description": "Vietnamese movie streaming addon for Stremio from motchilltv.chat",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright": "^1.48.0"
+  },
+  "keywords": ["stremio", "addon", "vietnamese", "movies", "vietsub"],
+  "author": "",
+  "license": "MIT"
+}

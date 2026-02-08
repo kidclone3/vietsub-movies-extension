@@ -1,0 +1,10 @@
+node_modules/
+*.log
+.DS_Store
+*.swp
+screenshot.png
+screenshot*.png
+episode-*.png
+episode-page.html
+page-source.html
+nuxt-data.json
